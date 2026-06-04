@@ -1,0 +1,6 @@
+{
+  "name": "온보딩 마스터",
+  "description": "국민취업지원제도 참여자와 신입사원의 조기 퇴사를 예방하고 직장 안착을 지원하는 AI 온보딩 커리어 코칭 및 한국형 직장 생활 솔루션 웹앱",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
