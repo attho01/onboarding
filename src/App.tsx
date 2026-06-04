@@ -76,11 +76,34 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const errData = await res.json();
-        throw new Error(errData.error || "API Key가 올바르지 않거나 활성화되지 않았습니다. 인터넷 상태 및 키의 글자를 확인해 주세요.");
+        let errMsg = "API Key가 올바르지 않거나 활성화되지 않았습니다. 인터넷 상태 및 키의 글자를 확인해 주세요.";
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errData = await res.json();
+            errMsg = errData.error || errMsg;
+          } else {
+            const text = await res.text();
+            console.error("Non-JSON error response received:", text.slice(0, 200));
+            errMsg = "서버 백엔드가 실행 중이 아니거나 일시적인 네트워크 연결 오류가 발생했습니다. 개발 서버를 재기동해 주세요.";
+          }
+        } catch (parseErr) {
+          console.error("Failed to parse error response:", parseErr);
+        }
+        throw new Error(errMsg);
       }
 
-      const data = await res.json();
+      let data: any = {};
+      try {
+        const contentType = res.headers.get("content-type");
+        if (contentType && contentType.includes("application/json")) {
+          data = await res.json();
+        } else {
+          throw new Error("서버가 올바르지 않은 응답 신호를 보냈습니다. (Non-JSON)");
+        }
+      } catch (jsonErr: any) {
+        throw new Error(jsonErr.message || "서버 응답을 안전하게 해독하지 못했습니다.");
+      }
       if (data.success) {
         localStorage.setItem("custom_gemini_api_key", rawKey.trim());
         localStorage.setItem("custom_gemini_api_key_valid", "true");
