@@ -32,6 +32,7 @@ import {
 } from "lucide-react";
 import { Message, JournalEntry, AnalysisData } from "./types";
 import { DIAGNOSIS_QUESTIONS, LABOR_LAW_QUIZ, SUPPORT_CHANNELS } from "./data";
+import { validateGeminiApiKey, getGeminiChatResponse, getGeminiAnalysis } from "./geminiClient";
 
 export default function App() {
   // Navigation Tabs
@@ -45,16 +46,6 @@ export default function App() {
   const [validationError, setValidationError] = useState<string | null>(null);
   const [validationSuccess, setValidationSuccess] = useState<boolean>(false);
 
-  // Helper to derive fetch headers with api key
-  const getApiHeaders = () => {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-    const savedKey = localStorage.getItem("custom_gemini_api_key");
-    if (savedKey) {
-      headers["x-gemini-api-key"] = savedKey;
-    }
-    return headers;
-  };
-
   // Validate custom API Key against endpoint
   const handleValidateApiKey = async (rawKey: string) => {
     if (!rawKey.trim()) {
@@ -66,45 +57,8 @@ export default function App() {
     setValidationSuccess(false);
 
     try {
-      const res = await fetch("/api/validate-key", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-gemini-api-key": rawKey.trim()
-        },
-        body: JSON.stringify({ key: rawKey.trim() })
-      });
-
-      if (!res.ok) {
-        let errMsg = "API Key가 올바르지 않거나 활성화되지 않았습니다. 인터넷 상태 및 키의 글자를 확인해 주세요.";
-        try {
-          const contentType = res.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            const errData = await res.json();
-            errMsg = errData.error || errMsg;
-          } else {
-            const text = await res.text();
-            console.error("Non-JSON error response received:", text.slice(0, 200));
-            errMsg = "서버 백엔드가 실행 중이 아니거나 일시적인 네트워크 연결 오류가 발생했습니다. 개발 서버를 재기동해 주세요.";
-          }
-        } catch (parseErr) {
-          console.error("Failed to parse error response:", parseErr);
-        }
-        throw new Error(errMsg);
-      }
-
-      let data: any = {};
-      try {
-        const contentType = res.headers.get("content-type");
-        if (contentType && contentType.includes("application/json")) {
-          data = await res.json();
-        } else {
-          throw new Error("서버가 올바르지 않은 응답 신호를 보냈습니다. (Non-JSON)");
-        }
-      } catch (jsonErr: any) {
-        throw new Error(jsonErr.message || "서버 응답을 안전하게 해독하지 못했습니다.");
-      }
-      if (data.success) {
+      const isValid = await validateGeminiApiKey(rawKey.trim());
+      if (isValid) {
         localStorage.setItem("custom_gemini_api_key", rawKey.trim());
         localStorage.setItem("custom_gemini_api_key_valid", "true");
         setCustomApiKey(rawKey.trim());
@@ -563,19 +517,13 @@ export default function App() {
         content: m.content
       }));
 
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: getApiHeaders(),
-        body: JSON.stringify({ messages: chatHistory })
-      });
-
-      if (!res.ok) throw new Error("서버와의 연결이 다소 불완전합니다.");
-      const data = await res.json();
+      const apiKeyToUse = customApiKey.trim() || localStorage.getItem("custom_gemini_api_key") || "";
+      const reply = await getGeminiChatResponse(apiKeyToUse, chatHistory);
 
       const aiMessage: Message = {
         id: `ai-${Date.now()}`,
         role: 'model',
-        content: data.reply,
+        content: reply,
         timestamp: new Date()
       };
       setChatMessages(prev => [...prev, aiMessage]);
@@ -593,15 +541,9 @@ export default function App() {
   const handleAnalyzeText = async (text: string) => {
     setAnalysingProgress(true);
     try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: getApiHeaders(),
-        body: JSON.stringify({ text })
-      });
-      if (res.ok) {
-        const parsedAnalysis: AnalysisData = await res.json();
-        setRealtimeAnalysis(parsedAnalysis);
-      }
+      const apiKeyToUse = customApiKey.trim() || localStorage.getItem("custom_gemini_api_key") || "";
+      const parsedAnalysis = await getGeminiAnalysis(apiKeyToUse, text);
+      setRealtimeAnalysis(parsedAnalysis);
     } catch {
       // Graceful fallback and ignore error silently to maintain chatting
     } finally {
@@ -730,14 +672,8 @@ export default function App() {
     let analysis: AnalysisData | undefined = undefined;
 
     try {
-      const res = await fetch("/api/analyze", {
-        method: "POST",
-        headers: getApiHeaders(),
-        body: JSON.stringify({ text: journalContent })
-      });
-      if (res.ok) {
-        analysis = await res.json();
-      }
+      const apiKeyToUse = customApiKey.trim() || localStorage.getItem("custom_gemini_api_key") || "";
+      analysis = await getGeminiAnalysis(apiKeyToUse, journalContent);
     } catch {
       // Silent error - continue without analysis
     }
