@@ -87,14 +87,7 @@ const SYSTEM_INSTRUCTION = `
 
 // Helper to initialize GoogleGenAI client
 const getAIClient = (apiKey: string) => {
-  return new GoogleGenAI({
-    apiKey: apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': "aistudio-build",
-      }
-    }
-  });
+  return new GoogleGenAI({ apiKey });
 };
 
 /**
